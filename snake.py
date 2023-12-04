@@ -1,6 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-%matplotlib inline
+import matplotlib.pyplot as plt 
 import time as tm
 def MCRNG(seed, A, C, M):
     
