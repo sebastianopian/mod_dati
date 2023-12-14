@@ -5,6 +5,7 @@ from scipy.stats import norm, lognorm
 import pandas as pd
 import emcee
 from scipy.optimize import minimize
+import pygtc
 
 data = pd.read_csv('Esercizio3.csv')
 data
@@ -52,3 +53,14 @@ for i in range(ndim):
     ax.yaxis.set_label_coords(-0.1, 0.5)
 
 axes[-1].set_xlabel("step number");
+plt.show()
+tau = sampler.get_autocorr_time()
+print(tau)
+
+flat_samples = sampler.get_chain(discard=100, flat=True)
+print(flat_samples.shape)
+
+GTC = pygtc.plotGTC(chains=flat_samples,
+                    paramNames=['$mu$','$sigma$'],
+                    chainLabels=['Altezza maschile'],
+                    figureSize='MNRAS_page')
