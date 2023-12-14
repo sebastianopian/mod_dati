@@ -1,51 +1,54 @@
 import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt 
+import time as tm
+from scipy.stats import norm, lognorm
+import pandas as pd
+import emcee
+from scipy.optimize import minimize
 
-# Caricamento dei dati
-data = np.loadtxt("/Users/sebastianopian/Desktop/mod_dati/dat.txt")
+data = pd.read_csv('Esercizio3.csv')
+data
 
-# Standardizzazione dei dati
-scaler = StandardScaler()
-data_std = scaler.fit_transform(data)
+def log_prior(theta):
+    m, s = theta
+    if s>0:
+        return 0.0
+    return -np.inf
 
-# PCA Full
-pca_full = PCA(n_components=data.shape[1])
-data_pca_full = pca_full.fit_transform(data_std)
-data_reconstructed_full = scaler.inverse_transform(pca_full.inverse_transform(data_pca_full))
-print("Explained variance by component:", pca_full.explained_variance_ratio_)
-plt.plot(pca_full.explained_variance_ratio_)
-plt.ylabel("$\sigma^2$")
-plt.xlabel('Component')
+def log_likelihood(theta, y, yerr):
+    m, s = theta
+    sigma2 = s*2+yerr*2
+    return -0.5 * np.sum((y - m) ** 2 / sigma2 + np.log(sigma2))
 
-# PCA Reduced
-pca_reduced = PCA(n_components=6)
-data_pca_reduced = pca_reduced.fit_transform(data_std)
-data_reconstructed_reduced = scaler.inverse_transform(pca_reduced.inverse_transform(data_pca_reduced))
+def log_posterior(theta, y, yerr):
+    lp = log_prior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood(theta, y, yerr)
 
+np.random.seed(42)
+nll = lambda *args: -log_posterior(*args)
+initial = np.array([170, 1.])*(1+ 0.1 * np.random.randn(2))
+soln = minimize(nll, initial, args=(data.Altezza, data.Errore))
+m_bf, s_bf = soln.x
+soln.x
 
-# Grafico dei dati originali
-plt.figure(figsize=(15, 5))
-plt.subplot(1, 3, 1)
-plt.plot(data[:, 8], data[:, 4], '.')
-plt.title('Dati Originali')
-plt.xlabel('$b-y$')
-plt.ylabel('Mass')
+pos = soln.x *(1+ 1e-4 * np.random.randn(32, 2))
+nwalkers, ndim = pos.shape
 
-# Grafico dei dati ricostruiti con PCA Full
-plt.subplot(1, 3, 2)
-plt.plot(data_reconstructed_full[:, 8], data_reconstructed_full[:, 4], '.')
-plt.title('Dati Ricostruiti con PCA Full')
-plt.xlabel('$b-y$')
-plt.ylabel('Mass')
+sampler = emcee.EnsembleSampler(
+    nwalkers, ndim, log_posterior, args=(data.Altezza, data.Errore)
+)
+sampler.run_mcmc(pos, 2000, progress=True);
 
-# Grafico dei dati ricostruiti con PCA Reduced
-plt.subplot(1, 3, 3)
-plt.plot(data_reconstructed_reduced[:, 8], data_reconstructed_reduced[:, 4], '.')
-plt.title('Dati Ricostruiti con PCA Reduced')
-plt.xlabel('$b-y$')
-plt.ylabel('Mass')
+fig, axes = plt.subplots(2, figsize=(10, 7), sharex=True)
+samples = sampler.get_chain()
+labels = ["$mu$", "$sigma$"]
+for i in range(ndim):
+    ax = axes[i]
+    ax.plot(samples[:, :, i], "k", alpha=0.3)
+    ax.set_xlim(0, len(samples))
+    ax.set_ylabel(labels[i])
+    ax.yaxis.set_label_coords(-0.1, 0.5)
 
-plt.tight_layout()
-plt.show()
+axes[-1].set_xlabel("step number");
